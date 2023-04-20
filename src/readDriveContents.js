@@ -1,4 +1,9 @@
 const { google } = require("googleapis");
+const cheerio = require("cheerio");
+const MarkdownIt = require("markdown-it");
+const TurndownService = require("turndown");
+
+const md = new MarkdownIt();
 const fs = require("fs");
 const auth = new google.auth.GoogleAuth({
     keyFile: "./credentials.json",
@@ -6,9 +11,23 @@ const auth = new google.auth.GoogleAuth({
 });
 const drive = google.drive({ version: "v3", auth });
 
+const turndownService = new TurndownService();
+turndownService.addRule("700", {
+    filter: "span",
+    replacement: function (content, node) {
+        if (node.style.fontWeight === "700") {
+            return "**" + content + "**";
+        }
+        return content;
+    },
+});
+
 async function getFileContents(fileId) {
-    const res = await drive.files.export({ fileId, mimeType: "text/plain" });
-    return res.data.substring(1).replaceAll(" ", "");
+    const res = await drive.files.export({ fileId, mimeType: "text/html" });
+
+    return turndownService
+        .turndown(res.data)
+        .replaceAll(/\u00a0 | U\+00a0 | \s/g, "");
 }
 
 async function listFilesInFolder(folderId) {

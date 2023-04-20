@@ -12,11 +12,28 @@ const auth = new google.auth.GoogleAuth({
 const drive = google.drive({ version: "v3", auth });
 
 const turndownService = new TurndownService();
+let index = 0;
+
 turndownService.addRule("700", {
-    filter: "span",
+    filter: ["span", "li", "ul", "ol", "h1", "h2", "h3", "h4", "h5", "h6"],
     replacement: function (content, node) {
         if (node.style.fontWeight === "700") {
+            // Check if content ends with a newline character
+            const endsWithLineBreak = /\n$/.test(content);
+
             return "**" + content + "**";
+        } else if (
+            node.parentNode.nodeName === "UL" &&
+            node.nodeName === "LI"
+        ) {
+            return "* " + content + "\n";
+        } else if (
+            node.parentNode.nodeName === "OL" &&
+            node.nodeName === "LI"
+        ) {
+            return `${(index += 1)}. ` + content + "\n";
+        } else if (node.style.fontStyle === "italic") {
+            return "_" + content + "_";
         }
         return content;
     },
@@ -25,8 +42,11 @@ turndownService.addRule("700", {
 async function getFileContents(fileId) {
     const res = await drive.files.export({ fileId, mimeType: "text/html" });
 
+    const $ = cheerio.load(res.data);
+    $("style").remove(); // remove all style tags
+
     return turndownService
-        .turndown(res.data)
+        .turndown($.html())
         .replaceAll(/\u00a0 | U\+00a0 | \s/g, "");
 }
 
